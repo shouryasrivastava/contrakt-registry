@@ -28,7 +28,6 @@ export async function POST(req: NextRequest) {
   // Validate token
   const tokenRow = await db.query.apiTokens.findFirst({
     where: eq(apiTokens.token, token),
-    with: { userId: true },
   });
 
   if (!tokenRow) {

@@ -4,3 +4,9 @@ node_modules/
 .env*.local
 *.tsbuildinfo
 .vercel
+# contrakt CLI generated files
+contrakt.lock
+contrakt.config.json
+contrakt-mcp-server.ts
+mcp.json
+.contrakt/
