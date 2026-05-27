@@ -1,6 +1,8 @@
 # Contrakt Registry
 
-A public API contract registry for the [`contrakt`](https://www.npmjs.com/package/contrakt) CLI tool. Developers run `contrakt publish` to upload their API contract JSON, and this registry stores it with a public URL.
+The public registry for the [`contrakt`](https://www.npmjs.com/package/contrakt) CLI tool. Developers run `contrakt publish` to upload their inferred API contracts, and anyone (human or AI agent) can browse and fetch them.
+
+Live at **[contrakt-registry.vercel.app](https://contrakt-registry.vercel.app)**
 
 ## Stack
 
