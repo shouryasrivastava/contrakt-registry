@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@neondatabase/serverless": "^0.10.0",
     "drizzle-orm": "^0.36.0",
     "nanoid": "^5.0.0",
