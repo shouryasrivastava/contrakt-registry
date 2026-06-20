@@ -1,183 +1,194 @@
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
-import { db } from "@/lib/db";
-import { contracts, apiTokens } from "@/lib/schema";
-import { eq, desc } from "drizzle-orm";
 import Link from "next/link";
-import TokenManager from "../components/TokenManager";
+import { desc, eq, inArray, sql } from "drizzle-orm";
+import { ArrowRight, Boxes, CircleDollarSign, GitFork, RadioTower, UsersRound } from "lucide-react";
+import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/access";
+import { db } from "@/lib/db";
+import {
+  apiTokens,
+  contractDependencies,
+  contracts,
+  monetizationConfigs,
+  paymentReceipts,
+} from "@/lib/schema";
+import OwnerConsoleShell from "../components/OwnerConsoleShell";
+import PublishApiButton from "../components/PublishApiButton";
 
-async function getUserContracts(userId: string) {
-  return db
-    .select({
-      id: contracts.id,
-      slug: contracts.slug,
-      name: contracts.name,
-      endpointCount: contracts.endpointCount,
-      stack: contracts.stack,
-      createdAt: contracts.createdAt,
-      updatedAt: contracts.updatedAt,
-    })
-    .from(contracts)
-    .where(eq(contracts.userId, userId))
-    .orderBy(desc(contracts.updatedAt));
+function formatUsdc(raw: string | null): string {
+  return (Number(raw ?? 0) / 1_000_000).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 6,
+  });
 }
 
-async function getUserTokens(userId: string) {
-  return db
-    .select({
-      id: apiTokens.id,
-      createdAt: apiTokens.createdAt,
-    })
-    .from(apiTokens)
-    .where(eq(apiTokens.userId, userId))
-    .orderBy(desc(apiTokens.createdAt));
-}
-
-function timeAgo(date: Date): string {
-  const now = new Date();
-  const diff = now.getTime() - new Date(date).getTime();
-  const seconds = Math.floor(diff / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-
-  if (days > 0) return `${days}d ago`;
-  if (hours > 0) return `${hours}h ago`;
-  if (minutes > 0) return `${minutes}m ago`;
-  return "just now";
-}
-
-function StackBadge({ stack }: { stack: string | null }) {
-  if (!stack) return null;
+function Metric({
+  label,
+  value,
+  icon: Icon,
+  note,
+}: {
+  label: string;
+  value: string;
+  icon: typeof Boxes;
+  note: string;
+}) {
   return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
-      {stack}
-    </span>
+    <div className="metric-panel min-h-[138px]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="grid h-9 w-9 place-items-center rounded-[9px] bg-[#f2f2f2]">
+          <Icon className="h-4 w-4 text-ink" />
+        </div>
+        <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-faint">{label}</p>
+      </div>
+      <p className="mt-5 text-[31px] leading-none tracking-[-0.03em] text-ink">{value}</p>
+      <p className="mt-2 text-[11px] text-muted">{note}</p>
+    </div>
   );
 }
 
 export default async function DashboardPage() {
   const session = await auth();
+  requireSession(session, "/dashboard");
 
-  if (!session?.user?.id) {
-    redirect("/");
-  }
+  const rows = await db
+    .select()
+    .from(contracts)
+    .where(eq(contracts.userId, session.user.id))
+    .orderBy(desc(contracts.updatedAt));
+  const ids = rows.map((row) => row.id);
+  const tokens = await db
+    .select({
+      id: apiTokens.id,
+      tokenPrefix: apiTokens.tokenPrefix,
+      createdAt: apiTokens.createdAt,
+    })
+    .from(apiTokens)
+    .where(eq(apiTokens.userId, session.user.id))
+    .orderBy(desc(apiTokens.createdAt));
 
-  let userContracts: Awaited<ReturnType<typeof getUserContracts>> = [];
-  let userTokens: Awaited<ReturnType<typeof getUserTokens>> = [];
+  const dependencyRows = ids.length
+    ? await db
+        .select({
+          contractId: contractDependencies.contractId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(contractDependencies)
+        .where(inArray(contractDependencies.contractId, ids))
+        .groupBy(contractDependencies.contractId)
+    : [];
+  const monetizationRows = ids.length
+    ? await db
+        .select()
+        .from(monetizationConfigs)
+        .where(inArray(monetizationConfigs.contractId, ids))
+    : [];
+  const configIds = monetizationRows.map((row) => row.id);
+  const receiptTotals = configIds.length
+    ? await db
+        .select({
+          paidCalls: sql<number>`count(*)::int`,
+          rawUsdc: sql<string>`coalesce(sum(${paymentReceipts.amountUsdc}::numeric), 0)::text`,
+        })
+        .from(paymentReceipts)
+        .where(inArray(paymentReceipts.monetizationConfigId, configIds))
+    : [{ paidCalls: 0, rawUsdc: "0" }];
 
-  try {
-    [userContracts, userTokens] = await Promise.all([
-      getUserContracts(session.user.id),
-      getUserTokens(session.user.id),
-    ]);
-  } catch {
-    // DB not configured yet
-  }
+  const dependencyByContract = new Map(dependencyRows.map((row) => [row.contractId, row.count]));
+  const monetizationByContract = new Map(monetizationRows.map((row) => [row.contractId, row]));
+  const endpointCount = rows.reduce((sum, row) => sum + row.endpointCount, 0);
+  const consumerCount = dependencyRows.reduce((sum, row) => sum + row.count, 0);
+  const totals = receiptTotals[0] ?? { paidCalls: 0, rawUsdc: "0" };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a]">
-      {/* Header */}
-      <header className="border-b border-[#1f1f1f] bg-[#0a0a0a]/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="text-white font-semibold text-sm tracking-tight">
-              contrakt
-            </span>
-            <span className="text-[#6b7280] text-sm font-light">registry</span>
-          </Link>
-          <div className="flex items-center gap-3">
-            {session.user.image && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={session.user.image}
-                alt={session.user.name ?? "Avatar"}
-                className="w-7 h-7 rounded-full border border-[#1f1f1f]"
-              />
-            )}
-            <span className="text-sm text-[#6b7280]">
-              {session.user.name}
-            </span>
+    <OwnerConsoleShell
+      active="portfolio"
+      session={session}
+      action={<PublishApiButton tokens={tokens} />}
+    >
+      <div className="p-5 sm:p-7">
+        <div className="flex flex-col justify-between gap-4 border-b border-border pb-6 sm:flex-row sm:items-end">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Publisher console</p>
+            <h1 className="mt-2 text-[34px] leading-none text-ink">My APIs</h1>
+            <p className="mt-2 text-[13px] text-muted">Publish contracts, track consumers, and configure agent access.</p>
           </div>
+          <PublishApiButton tokens={tokens} />
         </div>
-      </header>
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
-        <h1 className="text-2xl font-bold text-white mb-10">Dashboard</h1>
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Metric label="Published APIs" value={`${rows.length}`} icon={Boxes} note="Contracts in the registry" />
+          <Metric label="Endpoints" value={`${endpointCount}`} icon={RadioTower} note="Machine-readable operations" />
+          <Metric label="Consumers" value={`${consumerCount}`} icon={UsersRound} note="Declared dependencies" />
+          <Metric
+            label="Verified revenue"
+            value={`${formatUsdc(totals.rawUsdc)} USDC`}
+            icon={CircleDollarSign}
+            note={`${totals.paidCalls} verified paid call${totals.paidCalls === 1 ? "" : "s"}`}
+          />
+        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Contracts section */}
-          <div className="lg:col-span-2">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-white">
-                Your Contracts
-              </h2>
-              <span className="text-xs text-[#6b7280] bg-[#111111] border border-[#1f1f1f] px-2 py-1 rounded">
-                {userContracts.length} published
-              </span>
+        <section className="mt-6 overflow-hidden rounded-[12px] border border-border bg-white">
+          <div className="flex items-center justify-between border-b border-border px-5 py-4">
+            <div>
+              <h2 className="text-[20px] text-ink">Published contracts</h2>
+              <p className="mt-1 text-[11px] text-muted">The current source of truth for your public APIs.</p>
             </div>
+            <Link href="/registry" className="inline-flex items-center gap-2 text-[12px] font-medium text-ink">
+              Public registry <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
 
-            {userContracts.length === 0 ? (
-              <div className="text-center py-16 bg-[#111111] border border-[#1f1f1f] rounded-xl">
-                <p className="text-[#6b7280] text-sm mb-4">
-                  No contracts published yet.
+          {rows.length === 0 ? (
+            <div className="grid min-h-[300px] place-items-center px-5 py-12 text-center">
+              <div className="max-w-[450px]">
+                <div className="mx-auto grid h-12 w-12 place-items-center rounded-[12px] bg-[#f2f2f2]">
+                  <GitFork className="h-5 w-5 text-ink" />
+                </div>
+                <h3 className="mt-4 text-[22px] text-ink">Publish your first contract</h3>
+                <p className="mt-2 text-[13px] leading-6 text-muted">
+                  Contrakt infers your routes locally. Your lockfile stays in your repository; the registry receives the
+                  published contract and its version history.
                 </p>
-                <div className="inline-block text-left">
-                  <p className="text-xs text-[#444] mb-1">Get started:</p>
-                  <code className="text-xs font-mono text-gray-400 bg-[#0a0a0a] px-3 py-2 rounded-lg border border-[#1f1f1f] block">
-                    contrakt publish
-                  </code>
+                <div className="mt-5">
+                  <PublishApiButton tokens={tokens} />
                 </div>
               </div>
-            ) : (
-              <div className="space-y-3">
-                {userContracts.map((contract) => {
-                  const [username, name] = contract.slug.split("/");
-                  return (
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {rows.map((row) => {
+                const monetization = monetizationByContract.get(row.id);
+                return (
+                  <div
+                    key={row.id}
+                    className="grid gap-4 px-5 py-4 transition-colors hover:bg-[#fafafa] md:grid-cols-[minmax(0,1.4fr)_0.5fr_0.6fr_0.7fr_auto] md:items-center"
+                  >
+                    <div className="min-w-0">
+                      <Link href={`/u/${row.slug}/dashboard`} prefetch className="truncate text-[14px] font-semibold text-ink hover:underline">
+                        {row.name}
+                      </Link>
+                      <p className="mt-1 truncate font-mono text-[10px] text-faint">{row.slug}</p>
+                    </div>
+                    <p className="text-[12px] text-muted">{row.endpointCount} endpoints</p>
+                    <p className="text-[12px] text-muted">{dependencyByContract.get(row.id) ?? 0} consumers</p>
                     <Link
-                      key={contract.id}
-                      href={`/c/${username}/${name}`}
-                      className="group flex items-center justify-between p-4 bg-[#111111] border border-[#1f1f1f] rounded-xl hover:border-[#2d2d2d] hover:bg-[#141414] transition-all duration-150"
+                      href={`/u/${row.slug}/dashboard/integrations#deployment`}
+                      prefetch
+                      className="flex items-center gap-2 text-[11px] hover:underline"
                     >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-white text-sm font-medium font-mono group-hover:text-blue-400 transition-colors">
-                            {contract.slug}
-                          </p>
-                          <StackBadge stack={contract.stack} />
-                        </div>
-                        <p className="text-xs text-[#6b7280] mt-0.5">
-                          {contract.endpointCount} endpoint
-                          {contract.endpointCount !== 1 ? "s" : ""} · Updated{" "}
-                          {timeAgo(contract.updatedAt)}
-                        </p>
-                      </div>
-                      <svg
-                        className="w-4 h-4 text-[#444] group-hover:text-[#6b7280] flex-shrink-0 ml-4 transition-colors"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={1.5}
-                          d="M9 5l7 7-7 7"
-                        />
-                      </svg>
+                      <span className={`h-1.5 w-1.5 rounded-full ${row.baseUrl ? "bg-green-500" : "bg-amber-400"}`} />
+                      <span className="text-muted">{row.baseUrl ? "Deployment set" : "Needs deployment URL"}</span>
                     </Link>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Tokens section */}
-          <div>
-            <TokenManager initialTokens={userTokens} />
-          </div>
-        </div>
+                    <span className="rounded-full border border-border px-3 py-1.5 text-[10px] font-medium text-ink">
+                      {monetization?.enabled ? `$${monetization.priceUsd} / call` : "Free"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
       </div>
-    </div>
+    </OwnerConsoleShell>
   );
 }

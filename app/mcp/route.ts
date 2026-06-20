@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { contracts } from "@/lib/schema";
 import { ilike, and, or, eq, sql } from "drizzle-orm";
+import { apiError, readJsonBody } from "@/lib/api-response";
+import { enforceRateLimit, requestIdentifier } from "@/lib/rate-limit";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://contrakt-registry.vercel.app";
+const APP_URL = "https://registry.contrakt.dev";
 
 // MCP tool definitions
 const TOOLS = [
@@ -81,7 +83,7 @@ async function callTool(name: string, args: Args): Promise<string> {
       {
         contracts: rows.map((r) => ({
           ...r,
-          url: `${APP_URL}/c/${r.slug}`,
+          url: `${APP_URL}/u/${r.slug}`,
           contractUrl: `${APP_URL}/api/registry/contracts/${r.slug}`,
         })),
       },
@@ -95,7 +97,7 @@ async function callTool(name: string, args: Args): Promise<string> {
     const row = await db.query.contracts.findFirst({ where: eq(contracts.slug, slug) });
     if (!row) throw new Error(`Contract not found: ${slug}`);
     return JSON.stringify(
-      { slug: row.slug, name: row.name, stack: row.stack, endpointCount: row.endpointCount, contract: row.contract, url: `${APP_URL}/c/${slug}`, updatedAt: row.updatedAt },
+      { slug: row.slug, name: row.name, stack: row.stack, endpointCount: row.endpointCount, contract: row.contract, url: `${APP_URL}/u/${slug}`, updatedAt: row.updatedAt },
       null,
       2
     );
@@ -103,16 +105,21 @@ async function callTool(name: string, args: Args): Promise<string> {
 
   if (name === "get_mcp_config") {
     const slug = `${args.username}/${args.app}`;
-    const baseUrl = String(args.base_url ?? "http://localhost:3000");
     const row = await db.query.contracts.findFirst({ where: eq(contracts.slug, slug) });
     if (!row) throw new Error(`Contract not found: ${slug}`);
+    const baseUrl = String(args.base_url ?? row.baseUrl ?? "");
+    if (!baseUrl) {
+      throw new Error(
+        `Contract ${slug} does not have a deployment URL. The owner must configure one before generating MCP config.`,
+      );
+    }
     const eps = ((row.contract as { endpoints?: { method: string; path: string }[] })?.endpoints ?? []);
     return JSON.stringify(
       {
         mcpServers: {
           [String(args.app)]: { command: "contrakt", args: ["run-mcp", "--slug", slug, "--base-url", baseUrl] },
         },
-        _meta: { slug, endpoints: eps.map((e) => `${e.method} ${e.path}`), registryUrl: `${APP_URL}/c/${slug}` },
+        _meta: { slug, endpoints: eps.map((e) => `${e.method} ${e.path}`), registryUrl: `${APP_URL}/u/${slug}` },
       },
       null,
       2
@@ -173,7 +180,16 @@ async function handleMessage(msg: JsonRpcRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
+  const limited = await enforceRateLimit({
+    namespace: "registry-mcp",
+    identifier: requestIdentifier(req),
+    limit: 120,
+    windowSeconds: 60,
+  });
+  if (limited) return limited;
+  const parsed = await readJsonBody<JsonRpcRequest | JsonRpcRequest[]>(req, 128_000);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.value;
 
   // Handle batch requests
   if (Array.isArray(body)) {
@@ -181,6 +197,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(responses);
   }
 
+  if (!body || typeof body !== "object") {
+    return apiError(400, "BAD_REQUEST", "Invalid JSON-RPC request.");
+  }
   const response = await handleMessage(body as JsonRpcRequest);
   // Notifications return null — no response body needed
   if (response === null) return new NextResponse(null, { status: 202 });

@@ -4,7 +4,7 @@ import { contracts } from "@/lib/schema";
 import { sql } from "drizzle-orm";
 
 export async function GET() {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contrakt-registry.vercel.app";
+  const appUrl = "https://registry.contrakt.dev";
 
   const rows = await db
     .select({
@@ -20,7 +20,7 @@ export async function GET() {
   const contractList = rows
     .map(
       (c) =>
-        `- [${c.slug}](${appUrl}/c/${c.slug}) — ${c.endpointCount} endpoint(s)${c.stack ? `, ${c.stack}` : ""}, updated ${new Date(c.updatedAt).toISOString().split("T")[0]}`
+        `- [${c.slug}](${appUrl}/u/${c.slug}) — ${c.endpointCount} endpoint(s)${c.stack ? `, ${c.stack}` : ""}, updated ${new Date(c.updatedAt).toISOString().split("T")[0]}`
     )
     .join("\n");
 

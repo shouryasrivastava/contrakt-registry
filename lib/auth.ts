@@ -2,7 +2,6 @@ import NextAuth from "next-auth";
 import GitHub from "next-auth/providers/github";
 import { db } from "./db";
 import { users } from "./schema";
-import { sql } from "drizzle-orm";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: process.env.AUTH_SECRET,
@@ -49,6 +48,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (token.sub) {
         session.user.id = token.sub;
       }
+      if (typeof token.username === "string") {
+        session.user.username = token.username;
+      }
       return session;
     },
     async jwt({ token, account, profile }) {
@@ -61,7 +63,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
   pages: {
-    signIn: "/",
+    signIn: "/sign-in",
   },
 });
 
@@ -69,6 +71,7 @@ declare module "next-auth" {
   interface Session {
     user: {
       id: string;
+      username?: string;
       name?: string | null;
       email?: string | null;
       image?: string | null;

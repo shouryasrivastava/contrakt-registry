@@ -10,3 +10,8 @@ contrakt.config.json
 contrakt-mcp-server.ts
 mcp.json
 .contrakt/
+
+# local screenshots — never commit
+screenshots/
+playwright-report/
+test-results/

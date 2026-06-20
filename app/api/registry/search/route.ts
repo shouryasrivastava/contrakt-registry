@@ -2,13 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { contracts } from "@/lib/schema";
 import { ilike, and, or, sql } from "drizzle-orm";
+import { enforceRateLimit, requestIdentifier } from "@/lib/rate-limit";
 
 export async function GET(req: NextRequest) {
+  const limited = await enforceRateLimit({
+    namespace: "registry-search",
+    identifier: requestIdentifier(req),
+    limit: 120,
+    windowSeconds: 60,
+  });
+  if (limited) return limited;
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q") ?? "";
   const stack = searchParams.get("stack") ?? "";
-  const limit = Math.min(parseInt(searchParams.get("limit") ?? "10", 10), 50);
-  const offset = parseInt(searchParams.get("offset") ?? "0", 10);
+  const rawLimit = Number.parseInt(searchParams.get("limit") ?? "10", 10);
+  const rawOffset = Number.parseInt(searchParams.get("offset") ?? "0", 10);
+  const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(rawLimit, 50)) : 10;
+  const offset = Number.isFinite(rawOffset) ? Math.max(0, rawOffset) : 0;
 
   const conditions = [];
   if (q) {
@@ -33,10 +43,10 @@ export async function GET(req: NextRequest) {
 
   const rows = conditions.length > 0 ? await query.where(and(...conditions)) : await query;
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contrakt-registry.vercel.app";
+  const appUrl = "https://registry.contrakt.dev";
   const results = rows.map((r) => ({
     ...r,
-    url: `${appUrl}/c/${r.slug}`,
+    url: `${appUrl}/u/${r.slug}`,
     contractUrl: `${appUrl}/api/registry/contracts/${r.slug}`,
     mcpConfigUrl: `${appUrl}/api/registry/contracts/${r.slug}/mcp`,
   }));

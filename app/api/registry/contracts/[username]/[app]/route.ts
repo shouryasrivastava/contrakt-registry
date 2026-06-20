@@ -18,16 +18,17 @@ export async function GET(
     return NextResponse.json({ error: "Contract not found" }, { status: 404 });
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contrakt-registry.vercel.app";
+  const appUrl = "https://registry.contrakt.dev";
 
   return NextResponse.json({
     id: row.id,
     slug: row.slug,
     name: row.name,
     stack: row.stack,
+    baseUrl: row.baseUrl,
     endpointCount: row.endpointCount,
     contract: row.contract,
-    url: `${appUrl}/c/${slug}`,
+    url: `${appUrl}/u/${slug}`,
     mcpConfigUrl: `${appUrl}/api/registry/contracts/${slug}/mcp`,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

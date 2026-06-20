@@ -5,21 +5,40 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "release:env": "node scripts/check-production-env.mjs",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint . --max-warnings=0",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.0.0",
+    "@base-org/account": "^2.5.6",
+    "@coinbase/cdp-core": "^0.0.110",
+    "@coinbase/cdp-hooks": "^0.0.110",
+    "@coinbase/cdp-react": "^0.0.110",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@neondatabase/serverless": "^0.10.0",
-    "drizzle-orm": "^0.36.0",
+    "@radix-ui/react-avatar": "^1.1.11",
+    "@radix-ui/react-slot": "^1.2.4",
+    "@sentry/nextjs": "^10.0.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "drizzle-orm": "^0.45.2",
+    "lucide-react": "^1.17.0",
     "nanoid": "^5.0.0",
     "next": "^15.0.0",
     "next-auth": "^5.0.0-beta.25",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "postgres": "^3.4.9",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "tailwind-merge": "^3.6.0",
+    "viem": "^2.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
@@ -27,9 +46,23 @@
     "@types/react-dom": "^19.0.0",
     "autoprefixer": "^10.4.0",
     "dotenv": "^17.4.2",
-    "drizzle-kit": "^0.27.0",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "^15.5.18",
+    "drizzle-kit": "^0.31.8",
+    "@playwright/test": "^1.60.0",
+    "@eslint/eslintrc": "^3.3.1",
     "postcss": "^8.4.0",
     "tailwindcss": "^3.4.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.9"
+  },
+  "pnpm": {
+    "overrides": {
+      "esbuild": ">=0.25.0",
+      "hono": ">=4.12.25",
+      "postcss": ">=8.5.10",
+      "uuid": ">=11.1.1",
+      "ws": ">=8.21.0"
+    }
   }
 }
