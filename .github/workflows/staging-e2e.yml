@@ -1,0 +1,97 @@
+name: Staging E2E
+
+on:
+  pull_request:
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+    inputs:
+      real_providers:
+        description: Run real provider checks
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  deployments: write
+
+concurrency:
+  group: staging-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      E2E_AUTH_SECRET: ${{ secrets.E2E_AUTH_SECRET }}
+      E2E_RUN_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install Chromium
+        if: github.event_name == 'pull_request'
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Install all browsers
+        if: github.event_name != 'pull_request'
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
+      - name: Deploy isolated Vercel Preview
+        id: deploy
+        shell: bash
+        run: |
+          URL=$(pnpm dlx vercel@latest deploy --yes \
+            --token="${{ secrets.VERCEL_TOKEN }}" \
+            --build-env E2E_TEST_MODE=true \
+            --build-env NEXT_PUBLIC_E2E_TEST_MODE=true \
+            --build-env E2E_AUTH_SECRET="$E2E_AUTH_SECRET" \
+            --env E2E_TEST_MODE=true \
+            --env NEXT_PUBLIC_E2E_TEST_MODE=true \
+            --env E2E_AUTH_SECRET="$E2E_AUTH_SECRET")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+      - name: Checkout CLI
+        uses: actions/checkout@v4
+        with:
+          repository: shouryasrivastava/contrakt
+          path: contrakt-cli
+      - name: Build CLI package
+        working-directory: contrakt-cli
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+      - name: Deterministic portal and CLI lifecycle
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ steps.deploy.outputs.url }}
+          CLI_E2E: "true"
+          CONTRAKT_CLI_DIR: ${{ github.workspace }}/contrakt-cli
+          NEXT_PUBLIC_E2E_TEST_MODE: "true"
+          E2E_ALL_BROWSERS: ${{ github.event_name == 'pull_request' && 'false' || 'true' }}
+        run: pnpm test:e2e
+      - name: Real staging provider checks
+        if: github.event_name == 'schedule' || inputs.real_providers == true
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ steps.deploy.outputs.url }}
+          REAL_PROVIDER_SMOKE: "true"
+          NEXT_PUBLIC_E2E_TEST_MODE: "true"
+          NEXT_PUBLIC_CDP_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_CDP_PROJECT_ID }}
+          E2E_SEPOLIA_PRIVATE_KEY: ${{ secrets.E2E_SEPOLIA_PRIVATE_KEY }}
+          E2E_SEPOLIA_RECEIVER: ${{ secrets.E2E_SEPOLIA_RECEIVER }}
+          X402_RPC_URL: ${{ secrets.X402_RPC_URL }}
+          X402_USDC_ADDRESS: ${{ secrets.X402_USDC_ADDRESS }}
+        run: pnpm test:e2e:real
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: staging-e2e-${{ github.run_id }}
+          path: |
+            playwright-report
+            test-results
+          retention-days: 14

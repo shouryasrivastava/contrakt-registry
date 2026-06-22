@@ -57,7 +57,7 @@ function Metric({
 
 export default async function ApiOverviewPage({ params }: PageProps) {
   const { user, app } = await params;
-  const { session, contract, slug } = await getOwnedContract(user, app);
+  const { session, contract, slug } = await getOwnedContract(user, app, `/u/${user}/${app}/dashboard`);
 
   const [dependencyCountRow, monetization, versions, receiptRow, freeCallRow] = await Promise.all([
     db

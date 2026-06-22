@@ -62,7 +62,13 @@ export default function ConnectWalletButton() {
   const [balanceBusy, setBalanceBusy] = useState(false);
   const [balanceError, setBalanceError] = useState(false);
   const [announcedProviders, setAnnouncedProviders] = useState<AnnouncedProvider[]>([]);
-  const embeddedWalletEnabled = Boolean(process.env.NEXT_PUBLIC_CDP_PROJECT_ID);
+  const [e2eEmail, setE2eEmail] = useState("");
+  const [e2eOtp, setE2eOtp] = useState("");
+  const [e2eStep, setE2eStep] = useState<"email" | "otp">("email");
+  const [e2eError, setE2eError] = useState<string | null>(null);
+  const e2eWalletEnabled = process.env.NEXT_PUBLIC_E2E_TEST_MODE === "true";
+  const embeddedWalletEnabled =
+    Boolean(process.env.NEXT_PUBLIC_CDP_PROJECT_ID) || e2eWalletEnabled;
 
   useEffect(() => {
     setMounted(true);
@@ -179,6 +185,54 @@ export default function ConnectWalletButton() {
     }
   }
 
+  async function connectEmbeddedE2E() {
+    if (e2eOtp !== "123456") {
+      setE2eError("Incorrect code. Use 123456 for the deterministic E2E wallet.");
+      return;
+    }
+    setBusy(true);
+    setE2eError(null);
+    try {
+      const address = "0x4444444444444444444444444444444444444444";
+      const nonceRes = await fetch("/api/wallet/nonce", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address }),
+      });
+      const nonceData = await nonceRes.json().catch(() => ({}));
+      if (!nonceRes.ok || !nonceData.message) {
+        throw new Error(nonceData.error ?? "Could not create wallet challenge.");
+      }
+      const verifyRes = await fetch("/api/wallet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          address,
+          signature: `0x${"e".repeat(130)}`,
+          chainId: 84532,
+        }),
+      });
+      const verifyData = await verifyRes.json().catch(() => ({}));
+      if (!verifyRes.ok || !verifyData.wallet) {
+        throw new Error(verifyData.error ?? "Wallet verification failed.");
+      }
+      const storedWallet: StoredWallet = {
+        ...verifyData.wallet,
+        source: "embedded",
+      };
+      writeStoredWallet(storedWallet);
+      setWallet({ status: "connected", ...storedWallet });
+      setChooserOpen(false);
+      setEmbeddedFormOpen(false);
+    } catch (error) {
+      setE2eError(
+        error instanceof Error ? error.message : "Wallet creation failed.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function disconnect() {
     setBusy(true);
     try {
@@ -263,6 +317,18 @@ export default function ConnectWalletButton() {
     void loadBalances(wallet.address);
   }, [accountOpen, loadBalances, wallet]);
 
+  useEffect(() => {
+    if (!chooserOpen && !accountOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setChooserOpen(false);
+      setAccountOpen(false);
+      setEmbeddedFormOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [accountOpen, chooserOpen]);
+
   const activeModal = chooserOpen || accountOpen;
 
   return (
@@ -305,7 +371,10 @@ export default function ConnectWalletButton() {
         <div
           className="wallet-backdrop fixed inset-0 z-[5000] grid place-items-center overflow-y-auto bg-[#0b2857]/42 px-4 py-8 backdrop-blur-[7px]"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setChooserOpen(false);
+            if (event.target === event.currentTarget) {
+              setChooserOpen(false);
+              setEmbeddedFormOpen(false);
+            }
           }}
         >
           <section
@@ -323,7 +392,10 @@ export default function ConnectWalletButton() {
               </div>
               <button
                 type="button"
-                onClick={() => setChooserOpen(false)}
+                onClick={() => {
+                  setChooserOpen(false);
+                  setEmbeddedFormOpen(false);
+                }}
                 aria-label="Close wallet options"
                 className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-border bg-white text-muted hover:text-ink"
               >
@@ -334,9 +406,63 @@ export default function ConnectWalletButton() {
             {embeddedFormOpen ? (
               <div>
                 <div className="rounded-[14px] border border-[#dce6f2] bg-white p-4">
-                  <CDPProviders>
-                    <EmbeddedWalletForm onConnected={handleEmbeddedConnected} />
-                  </CDPProviders>
+                  {e2eWalletEnabled ? (
+                    <div className="space-y-3">
+                      {e2eStep === "email" ? (
+                        <>
+                          <label className="block text-[11px] font-medium text-muted">
+                            Email
+                            <input
+                              type="email"
+                              value={e2eEmail}
+                              onChange={(event) => setE2eEmail(event.target.value)}
+                              className="mt-1 w-full rounded-[9px] border border-border px-3 py-2 text-ink"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            disabled={!e2eEmail.includes("@")}
+                            onClick={() => setE2eStep("otp")}
+                            className="w-full rounded-full bg-ink px-4 py-2.5 text-[12px] font-medium text-white disabled:opacity-50"
+                          >
+                            Continue
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <label className="block text-[11px] font-medium text-muted">
+                            Verification code
+                            <input
+                              inputMode="numeric"
+                              value={e2eOtp}
+                              onChange={(event) => {
+                                setE2eOtp(event.target.value);
+                                setE2eError(null);
+                              }}
+                              className="mt-1 w-full rounded-[9px] border border-border px-3 py-2 text-ink"
+                            />
+                          </label>
+                          {e2eError ? (
+                            <p role="alert" className="text-[11px] text-red-700">
+                              {e2eError}
+                            </p>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={connectEmbeddedE2E}
+                            disabled={busy}
+                            className="w-full rounded-full bg-ink px-4 py-2.5 text-[12px] font-medium text-white disabled:opacity-50"
+                          >
+                            {busy ? "Creating wallet..." : "Create wallet"}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <CDPProviders>
+                      <EmbeddedWalletForm onConnected={handleEmbeddedConnected} />
+                    </CDPProviders>
+                  )}
                 </div>
                 <div className="mt-4 flex items-center justify-center gap-1.5 text-[10px] font-medium text-[#6b7f99]">
                   <ShieldCheck className="h-3.5 w-3.5" />

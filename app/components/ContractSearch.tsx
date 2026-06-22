@@ -56,7 +56,7 @@ export default function ContractSearch({
 
   return (
     <div className="space-y-6">
-      <div className="grid items-end gap-6 lg:grid-cols-[minmax(0,1fr)_580px]">
+      <div className="grid items-end gap-6">
         <div className="relative flex-1">
           <svg
             className="absolute left-3 top-1/2 -translate-y-1/2 text-muted w-4 h-4"
@@ -82,25 +82,6 @@ export default function ContractSearch({
             placeholder={`Search contracts, apps, tools, owners...`}
             className="w-full rounded-[8px] border border-border bg-surface py-4 pl-12 pr-4 text-[16px] text-ink placeholder-muted transition-all focus:border-accent focus:outline-none focus:ring-0"
           />
-        </div>
-        <div className="flex flex-wrap gap-4">
-          <div className="flex flex-col gap-2">
-            <span className="ml-1 text-[10px] font-bold uppercase tracking-widest text-faint">Category</span>
-            <div className="flex rounded-[8px] border border-border bg-surface p-1">
-              <button className="rounded-[4px] bg-accent px-4 py-2 text-xs font-semibold text-[#0b1326]">All</button>
-              <button className="px-4 py-2 text-xs font-semibold text-muted hover:text-ink">Data</button>
-              <button className="px-4 py-2 text-xs font-semibold text-muted hover:text-ink">Logic</button>
-              <button className="px-4 py-2 text-xs font-semibold text-muted hover:text-ink">Utility</button>
-            </div>
-          </div>
-          <div className="flex flex-col gap-2">
-            <span className="ml-1 text-[10px] font-bold uppercase tracking-widest text-faint">Pricing</span>
-            <div className="flex rounded-[8px] border border-border bg-surface p-1">
-              <button className="rounded-[4px] bg-accent px-4 py-2 text-xs font-semibold text-[#0b1326]">Any</button>
-              <button className="px-4 py-2 text-xs font-semibold text-muted hover:text-ink">Free</button>
-              <button className="px-4 py-2 text-xs font-semibold text-muted hover:text-ink">Paid</button>
-            </div>
-          </div>
         </div>
       </div>
 

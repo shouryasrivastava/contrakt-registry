@@ -15,6 +15,13 @@ const fallbackHosts = (process.env.DATABASE_HOSTADDRS ?? "")
 const connectionHosts = fallbackHosts.length
   ? fallbackHosts
   : [parsedDatabaseUrl.hostname];
+const ssl =
+  process.env.DATABASE_SSL === "false"
+    ? false
+    : {
+        rejectUnauthorized: true,
+        servername: parsedDatabaseUrl.hostname,
+      };
 
 const client = postgres({
   host: connectionHosts.join(","),
@@ -22,10 +29,7 @@ const client = postgres({
   database: parsedDatabaseUrl.pathname.replace(/^\//, ""),
   username: decodeURIComponent(parsedDatabaseUrl.username),
   password: decodeURIComponent(parsedDatabaseUrl.password),
-  ssl: {
-    rejectUnauthorized: true,
-    servername: parsedDatabaseUrl.hostname,
-  },
+  ssl,
   max: 3,
   prepare: false,
   connect_timeout: 3,

@@ -1,4 +1,5 @@
 import { apiError } from "./api-response";
+import { e2eEnabled } from "./e2e";
 
 type RateLimitOptions = {
   namespace: string;
@@ -8,6 +9,10 @@ type RateLimitOptions = {
 };
 
 export async function enforceRateLimit(options: RateLimitOptions) {
+  if (e2eEnabled()) {
+    return null;
+  }
+
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { unstable_cache } from "next/cache";
+import { e2eEnabled } from "@/lib/e2e";
 import { desc } from "drizzle-orm";
 import { databaseRead, db } from "@/lib/db";
 import { signInPath } from "@/lib/access";
@@ -13,19 +14,25 @@ import PublicRegistrySidebar from "../components/PublicRegistrySidebar";
 import DataUnavailable from "../components/DataUnavailable";
 import { auth } from "@/lib/auth";
 
-const getRegistryContracts = unstable_cache(
-  async () => {
-    const rows = await databaseRead(() =>
-      db.query.contracts.findMany({
-        orderBy: [desc(contracts.updatedAt)],
-      })
-    );
-    globalThis.__contraktRegistryRows = rows;
-    return rows;
-  },
+const loadRegistryContracts = async () => {
+  const rows = await databaseRead(() =>
+    db.query.contracts.findMany({
+      orderBy: [desc(contracts.updatedAt)],
+    })
+  );
+  globalThis.__contraktRegistryRows = rows;
+  return rows;
+};
+
+const getCachedRegistryContracts = unstable_cache(
+  loadRegistryContracts,
   ["registry-contracts"],
   { revalidate: 30 }
 );
+
+async function getRegistryContracts() {
+  return e2eEnabled() ? loadRegistryContracts() : getCachedRegistryContracts();
+}
 
 interface RegistryPageProps {
   searchParams?: Promise<{

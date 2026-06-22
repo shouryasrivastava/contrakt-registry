@@ -13,7 +13,7 @@ interface PageProps {
 
 export default async function MonetizationPage({ params }: PageProps) {
   const { user, app } = await params;
-  const { session, contract, slug } = await getOwnedContract(user, app);
+  const { session, contract, slug } = await getOwnedContract(user, app, `/u/${user}/${app}/dashboard/monetization`);
   const [monetization, connectedWallet] = await Promise.all([
     db.query.monetizationConfigs.findFirst({
       where: eq(monetizationConfigs.contractId, contract.id),

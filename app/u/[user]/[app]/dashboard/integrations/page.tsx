@@ -11,7 +11,7 @@ interface PageProps {
 
 export default async function IntegrationsPage({ params }: PageProps) {
   const { user, app } = await params;
-  const { session, contract, slug } = await getOwnedContract(user, app);
+  const { session, contract, slug } = await getOwnedContract(user, app, `/u/${user}/${app}/dashboard/integrations`);
   const rows = await db
     .select({
       id: webhooks.id,

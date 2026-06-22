@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { contracts, paymentReceipts, freeTierUsage } from "@/lib/schema";
 import { sql, gte } from "drizzle-orm";
 
-export const revalidate = 30;
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {

@@ -7,6 +7,9 @@ import { db } from "@/lib/db";
 import { userWallets, walletChallenges } from "@/lib/schema";
 import { apiError, readJsonBody } from "@/lib/api-response";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { e2eEnabled } from "@/lib/e2e";
+
+const E2E_SIGNATURE = `0x${"e".repeat(130)}`;
 
 export async function GET() {
   const session = await auth();
@@ -87,17 +90,21 @@ export async function POST(req: NextRequest) {
   }
 
   let valid = false;
-  try {
-    valid = await verifyMessage({
-      address: address as `0x${string}`,
-      message: challenge.message,
-      signature: body.signature as `0x${string}`,
-    });
-  } catch {
-    return NextResponse.json(
-      { error: "MetaMask returned an unreadable signature. Reconnect and sign the new message." },
-      { status: 400 },
-    );
+  if (e2eEnabled() && body.signature === E2E_SIGNATURE) {
+    valid = true;
+  } else {
+    try {
+      valid = await verifyMessage({
+        address: address as `0x${string}`,
+        message: challenge.message,
+        signature: body.signature as `0x${string}`,
+      });
+    } catch {
+      return NextResponse.json(
+        { error: "MetaMask returned an unreadable signature. Reconnect and sign the new message." },
+        { status: 400 },
+      );
+    }
   }
 
   if (!valid) {

@@ -1,6 +1,7 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { isUnsafeIpAddress } from "./deployment-url";
+import { e2eDeploymentProbe } from "./e2e";
 
 function isLocalHostname(hostname: string): boolean {
   const value = hostname.toLowerCase().replace(/^\[|\]$/g, "");
@@ -8,6 +9,7 @@ function isLocalHostname(hostname: string): boolean {
 }
 
 export async function assertSafeDeploymentTarget(url: URL, allowLocalhost: boolean): Promise<void> {
+  if (e2eDeploymentProbe(url.toString())) return;
   if (isLocalHostname(url.hostname)) {
     if (allowLocalhost) return;
     throw new Error("Localhost deployments cannot be tested in production.");
@@ -35,6 +37,8 @@ function certificateFailure(error: unknown): boolean {
 }
 
 export async function probeDeployment(url: string, timeoutMs = 4500): Promise<ProbeResult> {
+  const fixture = e2eDeploymentProbe(url);
+  if (fixture) return fixture;
   const startedAt = Date.now();
   const request = async (method: "HEAD" | "GET") =>
     fetch(url, {

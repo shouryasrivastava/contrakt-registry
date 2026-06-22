@@ -13,7 +13,7 @@ interface PageProps {
 
 export default async function ConsumersPage({ params }: PageProps) {
   const { user, app } = await params;
-  const { session, contract, slug } = await getOwnedContract(user, app);
+  const { session, contract, slug } = await getOwnedContract(user, app, `/u/${user}/${app}/dashboard/consumers`);
   const dependencies = await db
     .select({
       id: contractDependencies.id,
