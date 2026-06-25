@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
 const isDevelopment = process.env.NODE_ENV !== "production";
+const isLocalHttp =
+  process.env.NODE_ENV !== "production" || process.env.E2E_TEST_MODE === "true";
+
 const contentSecurityPolicy = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""} https://*.coinbase.com https://*.onramper.com`,
@@ -14,7 +17,7 @@ const contentSecurityPolicy = [
   "base-uri 'self'",
   "form-action 'self' https://github.com",
   "frame-ancestors 'none'",
-  "upgrade-insecure-requests",
+  ...(!isLocalHttp ? ["upgrade-insecure-requests"] : []),
 ].join("; ");
 
 const nextConfig: NextConfig = {

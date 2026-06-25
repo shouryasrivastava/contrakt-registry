@@ -5,6 +5,7 @@ import {
 } from "./tests/e2e/support/state";
 
 const visualRun = process.env.E2E_VISUAL === "true";
+const realProviderRun = process.env.REAL_PROVIDER_SMOKE === "true";
 
 const crossBrowserProjects =
   process.env.E2E_ALL_BROWSERS === "true" && !visualRun
@@ -73,7 +74,9 @@ export default defineConfig({
         {
           name: "owner-desktop",
           testIgnore:
-            /public|consumer|production-smoke|real-integrations|visual|mobile-smoke/,
+            realProviderRun
+              ? /public|consumer|production-smoke|visual|mobile-smoke/
+              : /public|consumer|production-smoke|real-integrations|visual|mobile-smoke/,
           use: { ...devices["Desktop Chrome"], storageState: ownerAuthFile },
         },
         {

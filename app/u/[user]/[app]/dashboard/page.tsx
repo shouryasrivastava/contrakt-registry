@@ -118,7 +118,9 @@ export default async function ApiOverviewPage({ params }: PageProps) {
           </div>
           <div className="text-left md:text-right">
             <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-faint">Last published</p>
-            <p className="mt-1 text-[12px] text-ink">{formatDate(contract.updatedAt)}</p>
+            <p className="mt-1 text-[12px] text-ink" data-dynamic>
+              {formatDate(contract.updatedAt)}
+            </p>
           </div>
         </div>
 
@@ -178,7 +180,9 @@ export default async function ApiOverviewPage({ params }: PageProps) {
                       <p className="font-mono text-[11px] font-semibold text-ink">v{version.version}</p>
                       <div>
                         <p className="text-[12px] text-ink">{version.endpointCount} endpoints</p>
-                        <p className="mt-1 text-[10px] text-faint">{formatDate(version.publishedAt)}</p>
+                        <p className="mt-1 text-[10px] text-faint" data-dynamic>
+                          {formatDate(version.publishedAt)}
+                        </p>
                       </div>
                       <div className="flex flex-wrap gap-2 text-[9px] font-medium uppercase tracking-[0.1em]">
                         {breaking ? <span className="rounded-full bg-red-50 px-2 py-1 text-red-600">{breaking} breaking</span> : null}
