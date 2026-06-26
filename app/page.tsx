@@ -60,7 +60,7 @@ function DarkNav() {
     <header className="fixed inset-x-0 top-0 z-50 border-b border-[#23252a]/80 bg-[#08090a]/85 backdrop-blur">
       <div className="mx-auto flex h-[60px] max-w-[1200px] items-center justify-between gap-4 px-6">
         <Link href="/" className="flex items-center gap-2">
-          <Image src="/images/contrakt-logo-white.png" alt="Contrakt" width={34} height={34} />
+          <Image src="/brand/contrakt-icon-white-192.png" alt="Contrakt" width={34} height={34} />
           <span className="text-[24px] font-bold leading-none tracking-[-0.55px] text-[#f7f8f8]">Contrakt</span>
         </Link>
         <nav className="hidden items-center gap-7 md:flex">
@@ -516,7 +516,7 @@ export default function Landing() {
         <div className="mx-auto grid max-w-[1200px] grid-cols-2 gap-8 px-6 py-16 md:grid-cols-5">
           <div className="col-span-2 md:col-span-1">
             <div className="mb-4 flex items-center gap-2">
-              <Image src="/images/contrakt-logo-white.png" alt="Contrakt" width={28} height={28} />
+              <Image src="/brand/contrakt-icon-white-192.png" alt="Contrakt" width={28} height={28} />
               <span className="text-[22px] font-bold leading-none tracking-[-0.45px] text-[#f7f8f8]">Contrakt</span>
             </div>
             <p className="text-[13px] leading-relaxed text-[#62666d]">Open-source API contract layer for the age of agents.</p>

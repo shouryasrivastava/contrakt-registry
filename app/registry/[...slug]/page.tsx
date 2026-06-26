@@ -57,7 +57,7 @@ function DarkRegistryNav() {
     <header className="fixed inset-x-0 top-0 z-50 border-b border-[#23252a]/80 bg-[#08090a]/85 backdrop-blur">
       <div className="mx-auto flex h-[60px] max-w-[1200px] items-center justify-between gap-4 px-6">
         <Link href="/" className="flex items-center gap-2">
-          <Image src="/images/contrakt-logo-white.png" alt="Contrakt" width={34} height={34} />
+          <Image src="/brand/contrakt-icon-white-192.png" alt="Contrakt" width={34} height={34} />
           <span className="text-[24px] font-bold leading-none tracking-[-0.55px] text-[#f7f8f8]">Contrakt</span>
         </Link>
         <nav className="hidden items-center gap-7 md:flex">
