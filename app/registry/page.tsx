@@ -1,177 +1,268 @@
-import Link from "next/link";
-import { unstable_cache } from "next/cache";
-import { e2eEnabled } from "@/lib/e2e";
-import { desc } from "drizzle-orm";
-import { databaseRead, db } from "@/lib/db";
-import { signInPath } from "@/lib/access";
-import { contracts } from "@/lib/schema";
-import ContractSearch from "../components/ContractSearch";
-import { FloatingNav, WorkspaceLayout } from "../components/WorkspaceChrome";
-import ConnectWalletButton from "../components/ConnectWalletButton";
-import AccountAvatar from "../components/AccountAvatar";
-import ProfileMenu from "../components/ProfileMenu";
-import PublicRegistrySidebar from "../components/PublicRegistrySidebar";
-import DataUnavailable from "../components/DataUnavailable";
-import { auth } from "@/lib/auth";
+"use client";
 
-const loadRegistryContracts = async () => {
-  const rows = await databaseRead(() =>
-    db.query.contracts.findMany({
-      orderBy: [desc(contracts.updatedAt)],
-    })
-  );
-  globalThis.__contraktRegistryRows = rows;
-  return rows;
+import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { ArrowRight, ChevronRight, Search, Star } from "lucide-react";
+
+const githubUrl = "https://github.com/shouryasrivastava/contrakt";
+const REGISTRY_ORIGIN = process.env.NEXT_PUBLIC_REGISTRY_URL || "https://registry.contrakt.dev";
+const githubLoginHref = `${REGISTRY_ORIGIN}/sign-in?next=${encodeURIComponent("/dashboard")}`;
+const mono = "'JetBrains Mono', 'DM Mono', monospace";
+
+type LiveContract = {
+  slug: string;
+  name: string;
+  description?: string | null;
+  stack?: string | null;
+  endpointCount?: number | null;
+  updatedAt?: string | null;
+  registryUrl?: string;
+  mcpConfigUrl?: string;
 };
 
-const getCachedRegistryContracts = unstable_cache(
-  loadRegistryContracts,
-  ["registry-contracts"],
-  { revalidate: 30 }
-);
-
-async function getRegistryContracts() {
-  return e2eEnabled() ? loadRegistryContracts() : getCachedRegistryContracts();
-}
-
-interface RegistryPageProps {
-  searchParams?: Promise<{
-    q?: string;
-    stack?: string;
-    sort?: string;
-  }>;
-}
-
-declare global {
-  // Survives hot reloads in local dev and protects navigation from brief Neon/DNS outages.
-  var __contraktRegistryRows: Awaited<ReturnType<typeof db.query.contracts.findMany>> | undefined;
-}
-
-export default async function RegistryPage({ searchParams }: RegistryPageProps) {
-  const [params, session] = await Promise.all([
-    Promise.resolve(searchParams).then((value) => value ?? {}),
-    auth(),
-  ]);
-  const q = params.q?.trim().toLowerCase() ?? "";
-  const stack = params.stack?.trim().toLowerCase() ?? "";
-
-  let rows;
-  let degraded = false;
-  try {
-    rows = await getRegistryContracts();
-  } catch {
-    rows = globalThis.__contraktRegistryRows;
-    degraded = Boolean(rows);
-    if (!rows) {
-      return (
-        <DataUnavailable
-          retryHref="/registry"
-          title="Public registry is temporarily unavailable"
-          message="Contrakt could not load live contract data. No placeholder contracts are being shown."
-        />
-      );
-    }
-  }
-
-  const filtered = rows.filter((row) => {
-    const haystack = `${row.slug} ${row.name}`.toLowerCase();
-    if (q && !haystack.includes(q)) return false;
-    if (stack && !(row.stack ?? "").toLowerCase().includes(stack)) return false;
-    return true;
-  });
-
-  const dashboardHref = session?.user ? "/dashboard" : signInPath("/dashboard");
+function DarkRegistryNav() {
   return (
-    <div className="min-h-screen bg-background px-3 pb-10 pt-6 sm:px-5">
-      <div className="mx-auto max-w-[1320px]">
-        <FloatingNav
-          apisHref={dashboardHref}
-          actions={
-            <>
-              <Link href={dashboardHref} className="hidden rounded-full border border-[#202020] bg-transparent px-5 py-2 text-[13px] font-medium text-[#202020] sm:inline-flex">
-                Publish API
-              </Link>
-              <ConnectWalletButton />
-              {session?.user ? (
-                <ProfileMenu
-                  image={session.user.image}
-                  name={session.user.name}
-                  username={session.user.username}
-                  email={session.user.email}
-                />
-              ) : (
-                <AccountAvatar name="Guest" />
-              )}
-            </>
-          }
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-[#23252a]/80 bg-[#08090a]/85 backdrop-blur">
+      <div className="mx-auto flex h-[60px] max-w-[1200px] items-center justify-between gap-4 px-6">
+        <Link href="/" className="flex items-center gap-2">
+          <Image src="/images/contrakt-logo-white.png" alt="Contrakt" width={34} height={34} />
+          <span className="text-[24px] font-bold leading-none tracking-[-0.55px] text-[#f7f8f8]">Contrakt</span>
+        </Link>
+        <nav className="hidden items-center gap-7 md:flex">
+          <a href={`${githubUrl}#readme`} className="text-[13px] text-[#8a8f98] transition-colors hover:text-[#f7f8f8]">Docs</a>
+          <Link href="/registry" className="text-[13px] text-[#f36127]">Registry</Link>
+          <a href={githubUrl} className="text-[13px] text-[#8a8f98] transition-colors hover:text-[#f7f8f8]">GitHub</a>
+        </nav>
+        <div className="flex items-center gap-3">
+          <a href={githubLoginHref} className="hidden text-[13px] text-[#8a8f98] transition-colors hover:text-[#f7f8f8] sm:block">Login</a>
+          <a href={githubLoginHref} className="rounded-md bg-[#f36127] px-4 py-2 text-[13px] font-medium text-white transition-opacity hover:opacity-90">
+            Continue with GitHub
+          </a>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function stackLabel(stack?: string | null) {
+  if (!stack) return "Unknown stack";
+  return stack.replace(/-/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()).replace("Nextjs", "Next.js");
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "Unknown";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+export default function RegistryPage() {
+  const [contracts, setContracts] = useState<LiveContract[]>([]);
+  const [query, setQuery] = useState("");
+  const [activeStack, setActiveStack] = useState("All");
+  const [sort, setSort] = useState<"recent" | "endpoints" | "name">("recent");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch("/api/registry/search?limit=50", {
+          headers: { accept: "application/json" },
+          signal: controller.signal,
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data?.error || "Live registry data unavailable");
+        setContracts(Array.isArray(data.contracts) ? data.contracts : []);
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setContracts([]);
+          setError(err instanceof Error ? err.message : "Live registry data unavailable");
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }
+
+    void load();
+    return () => controller.abort();
+  }, []);
+
+  const stacks = useMemo(() => {
+    const values = Array.from(new Set(contracts.map((contract) => contract.stack).filter(Boolean))) as string[];
+    return ["All", ...values.sort()];
+  }, [contracts]);
+
+  const filtered = useMemo(() => {
+    const normalizedQuery = query.toLowerCase().trim();
+    return contracts
+      .filter((contract) => {
+        const matchesQuery =
+          !normalizedQuery ||
+          contract.name.toLowerCase().includes(normalizedQuery) ||
+          contract.slug.toLowerCase().includes(normalizedQuery) ||
+          (contract.description ?? "").toLowerCase().includes(normalizedQuery);
+        const matchesStack = activeStack === "All" || contract.stack === activeStack;
+        return matchesQuery && matchesStack;
+      })
+      .sort((a, b) => {
+        if (sort === "endpoints") return (b.endpointCount ?? 0) - (a.endpointCount ?? 0);
+        if (sort === "name") return a.name.localeCompare(b.name);
+        return new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime();
+      });
+  }, [activeStack, contracts, query, sort]);
+
+  const totalEndpoints = contracts.reduce((sum, contract) => sum + (contract.endpointCount ?? 0), 0);
+
+  return (
+    <main className="min-h-screen bg-[#08090a] font-sans text-[#f7f8f8] antialiased">
+      <DarkRegistryNav />
+
+      <section className="relative overflow-hidden border-b border-[#23252a] px-6 pt-[60px]">
+        <div
+          className="absolute inset-0 opacity-30"
+          style={{ backgroundImage: "radial-gradient(circle, rgba(243,97,39,0.16) 1px, transparent 1px)", backgroundSize: "22px 22px" }}
         />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#08090a] to-transparent" />
+        <div className="relative mx-auto max-w-[900px] py-20 text-center">
+          <p className="mb-5 text-[12px] uppercase tracking-widest text-[#f36127]" style={{ fontFamily: mono }}>registry.contrakt.dev</p>
+          <h1 className="mx-auto mb-5 max-w-[760px] text-[clamp(44px,7vw,72px)] font-light leading-none tracking-[-1.2px] text-[#f7f8f8]">
+            Browse live API contracts.
+          </h1>
+          <p className="mx-auto mb-10 max-w-[560px] text-[17px] leading-[1.6] text-[#8a8f98]">
+            Discover published contracts, inspect endpoint shapes, and connect agents to APIs with MCP metadata.
+          </p>
+          <div className="mx-auto mb-8 flex max-w-[520px] items-center justify-center gap-6 text-[13px] text-[#62666d]" style={{ fontFamily: mono }}>
+            <span><span className="text-[#f7f8f8]">{contracts.length}</span> contracts</span>
+            <span><span className="text-[#f7f8f8]">{totalEndpoints.toLocaleString()}</span> endpoints</span>
+            <span><span className="text-[#f36127]">live</span> registry</span>
+          </div>
+          <div className="relative mx-auto max-w-[680px]">
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#62666d]" />
+            <input
+              type="text"
+              placeholder="Search by contract name, owner, or description..."
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              className="w-full rounded-xl border border-[#23252a] bg-[#0f1011] py-4 pl-11 pr-5 text-sm text-[#f7f8f8] shadow-[inset_0_0_0_1px_rgba(35,37,42,0.7)] outline-none transition-all placeholder:text-[#4a4d55] focus:border-[#f36127] focus:ring-2 focus:ring-[#f36127]/15"
+            />
+          </div>
+        </div>
+      </section>
+
+      <div className="mx-auto max-w-[1200px] px-6 py-10">
+        <div className="mb-8 flex flex-col justify-between gap-4 border-b border-[#23252a] pb-6 sm:flex-row sm:items-center">
+          <div className="flex flex-wrap gap-2">
+            {stacks.map((stack) => (
+              <button
+                key={stack}
+                type="button"
+                onClick={() => setActiveStack(stack)}
+                className={`rounded-md border px-3.5 py-1.5 text-xs font-medium transition-all ${
+                  activeStack === stack ? "border-[#f36127] bg-[#f36127] text-white" : "border-[#23252a] bg-[#0f1011] text-[#8a8f98] hover:border-[#323334] hover:text-[#f7f8f8]"
+                }`}
+                style={{ fontFamily: mono }}
+              >
+                {stack === "All" ? "All" : stackLabel(stack)}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="shrink-0 text-xs text-[#62666d]" style={{ fontFamily: mono }}>Sort:</span>
+            {(["recent", "endpoints", "name"] as const).map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setSort(item)}
+                className={`rounded-md border px-3 py-1.5 text-xs capitalize transition-colors ${
+                  sort === item ? "border-[#323334] bg-[#161718] text-[#f7f8f8]" : "border-transparent text-[#62666d] hover:text-[#8a8f98]"
+                }`}
+                style={{ fontFamily: mono }}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="rounded-xl border border-[#23252a] bg-[#0f1011] px-6 py-16 text-center text-[#8a8f98]" style={{ fontFamily: mono }}>
+            Loading live registry contracts...
+          </div>
+        ) : error ? (
+          <div className="rounded-xl border border-[#3a3020] bg-[#16120d] px-6 py-12 text-center">
+            <p className="font-medium text-[#f7f8f8]">Public registry is temporarily unavailable.</p>
+            <p className="mt-2 text-sm text-[#8a8f98]">{error}. No placeholder contracts are being shown.</p>
+            <a href={REGISTRY_ORIGIN} className="mt-6 inline-flex items-center gap-2 rounded-md bg-[#f36127] px-5 py-2.5 text-sm font-medium text-white">
+              Open live registry <ArrowRight className="h-4 w-4" />
+            </a>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="py-24 text-center text-[#62666d]">
+            <Search className="mx-auto mb-4 h-10 w-10 opacity-50" />
+            <p className="font-medium text-[#8a8f98]">No contracts found</p>
+            <p className="mt-1 text-sm">Try a different search or stack filter.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((contract, index) => (
+              <Link
+                key={contract.slug}
+                href={`/registry/${contract.slug}`}
+                className="group block overflow-hidden rounded-xl border border-[#23252a] bg-[#0f1011] p-6 transition-all hover:-translate-y-0.5 hover:border-[#323334] hover:shadow-[0_16px_45px_rgba(0,0,0,0.35)]"
+                style={{ animation: `fadeUp 0.4s ${index * 0.04}s ease both`, boxShadow: "inset 0 0 0 1px rgba(35,37,42,0.4)" }}
+              >
+                <div className="mb-5 flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-semibold text-[#f7f8f8] transition-colors group-hover:text-[#f36127]" style={{ fontFamily: mono }}>{contract.name}</div>
+                    <div className="mt-1 truncate text-xs text-[#62666d]" style={{ fontFamily: mono }}>{contract.slug}</div>
+                  </div>
+                  <span className="rounded bg-[#f36127]/15 px-2 py-0.5 text-[10px] font-bold text-[#f36127]" style={{ fontFamily: mono }}>LIVE</span>
+                </div>
+                <p className="mb-6 line-clamp-3 text-sm leading-relaxed text-[#8a8f98]">
+                  {contract.description || "Published Contrakt API contract with machine-readable endpoints and registry metadata."}
+                </p>
+                <div className="mb-6 flex flex-wrap gap-1.5">
+                  <span className="rounded border border-[#23252a] bg-[#161718] px-2 py-1 text-[10px] font-bold text-[#8a8f98]" style={{ fontFamily: mono }}>
+                    {stackLabel(contract.stack)}
+                  </span>
+                  <span className="rounded border border-[#3a3020] bg-[#201810] px-2 py-1 text-[10px] font-bold text-[#f36127]" style={{ fontFamily: mono }}>
+                    MCP
+                  </span>
+                </div>
+                <div className="flex items-center justify-between border-t border-[#23252a] pt-4">
+                  <div className="flex min-w-0 items-center gap-3 text-xs text-[#62666d]" style={{ fontFamily: mono }}>
+                    <span className="flex items-center gap-1"><Star className="h-3 w-3" /> Live</span>
+                    <span>{contract.endpointCount ?? 0} endpoints</span>
+                    <span>{formatDate(contract.updatedAt)}</span>
+                  </div>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-[#62666d] transition-all group-hover:translate-x-0.5 group-hover:text-[#f36127]" />
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
 
-      <main className="pt-6">
-        <WorkspaceLayout
-          sidebar={<PublicRegistrySidebar dashboardHref={dashboardHref} />}
-        >
-          <div className="px-6 py-6">
-            {degraded ? (
-              <div className="mb-5 rounded-[10px] border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-900">
-                Showing the last available registry data while the live database reconnects.
-              </div>
-            ) : null}
-            <div className="mb-8 flex items-start justify-between gap-4">
-              <div>
-                <h1 className="display-title text-[#202020]">Public Registry</h1>
-                <p className="mt-2 max-w-2xl text-[14px] text-[#6b6b6b]">
-                  Discover published agent-ready contracts, inspect MCP-ready endpoints, and open live contract pages.
-                </p>
-              </div>
-              <div className="rounded-full border border-border bg-white px-3 py-1.5 shadow-[0_1px_3px_rgba(32,32,32,0.04)]">
-                <span className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#202020]">
-                  <span className="h-2 w-2 rounded-full bg-accent" />
-                  {filtered.length} Contracts
-                </span>
-              </div>
-            </div>
-
-            <div className="soft-panel p-5">
-              <ContractSearch initialQ={params.q ?? ""} initialStack={params.stack ?? ""} initialSort={params.sort ?? "recent"} />
-            </div>
-
-            <div className="mt-5 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-              {filtered.map((contract) => (
-                <Link
-                  key={contract.id}
-                  href={`/u/${contract.slug}`}
-                  className="soft-panel flex min-h-[220px] flex-col justify-between p-5 transition hover:-translate-y-0.5 hover:bg-[#fcfcfc]"
-                >
-                  <div>
-                    <div className="mb-4 flex items-center justify-between">
-                      <span className="inline-flex items-center gap-2 rounded-full bg-[#fff4ef] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-accent">
-                        <span className="h-2 w-2 rounded-full bg-accent" />
-                        Live
-                      </span>
-                      {contract.stack ? (
-                        <span className="rounded-full border border-border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#6b6b6b]">
-                          {contract.stack}
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="text-[12px] font-medium uppercase tracking-[0.18em] text-[#8a8a8a]">Registry</p>
-                    <h2 className="mt-2 text-[28px] leading-[1] tracking-[-0.03em] text-[#202020]">{contract.name}</h2>
-                    <p className="mt-3 text-[13px] text-[#6b6b6b]">{contract.slug}</p>
-                    <p className="mt-5 text-[14px] leading-[1.5] text-[#5f5e5e]">
-                      {contract.endpointCount} endpoint{contract.endpointCount === 1 ? "" : "s"} ready for MCP clients and agent workflows.
-                    </p>
-                  </div>
-                  <div className="mt-6 flex items-center justify-between border-t border-border pt-4 text-[13px] font-medium text-[#202020]">
-                    <span>Open contract</span>
-                    <span>→</span>
-                  </div>
-                </Link>
-              ))}
-            </div>
+      <div className="mx-auto max-w-[1200px] px-6 pb-20">
+        <div className="flex flex-col items-center justify-between gap-6 rounded-xl border border-[#23252a] bg-[#0f1011] p-8 md:flex-row" style={{ boxShadow: "inset 0 0 0 1px rgba(35,37,42,0.4)" }}>
+          <div>
+            <div className="mb-2 text-xs uppercase tracking-widest text-[#62666d]" style={{ fontFamily: mono }}>Publish your API</div>
+            <h3 className="mb-1 text-3xl font-light text-[#f7f8f8]">Add your contract to the registry.</h3>
+            <p className="text-sm text-[#8a8f98]">
+              Sign in with GitHub, then run <code className="font-mono text-[#d0d6e0]">contrakt publish</code> from your project root.
+            </p>
           </div>
-        </WorkspaceLayout>
-      </main>
-    </div>
+          <a href={githubLoginHref} className="flex shrink-0 items-center gap-2 rounded-md bg-[#f36127] px-6 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90">
+            Continue with GitHub <ArrowRight className="h-4 w-4" />
+          </a>
+        </div>
+      </div>
+    </main>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import * as Sentry from "@sentry/nextjs";
+import Link from "next/link";
 import { useEffect } from "react";
 
 export default function GlobalError({
@@ -34,12 +35,12 @@ export default function GlobalError({
               >
                 Try again
               </button>
-              <a
+              <Link
                 href="/registry"
                 className="rounded-full border border-[#202020] px-5 py-2 text-sm font-medium"
               >
                 Registry
-              </a>
+              </Link>
             </div>
           </section>
         </main>

@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
     windowSeconds: 60,
   });
   if (limited) return limited;
+
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q") ?? "";
   const stack = searchParams.get("stack") ?? "";
@@ -42,14 +43,17 @@ export async function GET(req: NextRequest) {
     .orderBy(sql`${contracts.updatedAt} DESC`);
 
   const rows = conditions.length > 0 ? await query.where(and(...conditions)) : await query;
+  const appUrl = process.env.NEXT_PUBLIC_REGISTRY_URL || process.env.NEXT_PUBLIC_APP_URL || "https://registry.contrakt.dev";
 
-  const appUrl = "https://registry.contrakt.dev";
-  const results = rows.map((r) => ({
-    ...r,
-    url: `${appUrl}/u/${r.slug}`,
-    contractUrl: `${appUrl}/api/registry/contracts/${r.slug}`,
-    mcpConfigUrl: `${appUrl}/api/registry/contracts/${r.slug}/mcp`,
+  const results = rows.map((row) => ({
+    ...row,
+    url: `${appUrl}/u/${row.slug}`,
+    contractUrl: `${appUrl}/api/registry/contracts/${row.slug}`,
+    mcpConfigUrl: `${appUrl}/api/registry/contracts/${row.slug}/mcp`,
   }));
 
-  return NextResponse.json({ contracts: results, total: results.length });
+  return NextResponse.json(
+    { contracts: results, total: results.length },
+    { headers: { "cache-control": "s-maxage=30, stale-while-revalidate=120" } }
+  );
 }
